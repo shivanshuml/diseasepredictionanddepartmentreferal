@@ -3,6 +3,9 @@ flask-cors
 flask-jwt-extended
 pandas
 numpy
-scikit-learn
 joblib
+scikit-learn
 werkzeug
+gunicorn
+
+
