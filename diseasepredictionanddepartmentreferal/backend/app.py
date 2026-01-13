@@ -7,6 +7,7 @@ import re
 from difflib import get_close_matches
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
+import os
 from flask_jwt_extended import (
     JWTManager,
     create_access_token,
@@ -27,17 +28,20 @@ CORS(
 )
 
 # ================= JWT CONFIG =================
-app.config["JWT_SECRET_KEY"] = "change-this-secret-key"
+app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", "dev-secret")
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=2)
 jwt = JWTManager(app)
 
 # ================= ML MODEL =================
-model = joblib.load("D:/vscode/shivanshu/disease_model.pkl")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-df = pd.read_csv(
-    "D:/vscode/shivanshu/Final_Augmented_dataset_Diseases_and_Symptoms.csv",
-    nrows=40000
-)
+MODEL_PATH = os.path.join(BASE_DIR, "disease_model.pkl")
+CSV_PATH = os.path.join(BASE_DIR, "Final_Augmented_dataset_Diseases_and_Symptoms.csv")
+
+model = joblib.load(MODEL_PATH)
+df = pd.read_csv(CSV_PATH, nrows=40000)
+DB_PATH = os.path.join(BASE_DIR, "appointments.db")
+
 
 symptom_list = df.columns.tolist()
 symptom_list.remove("diseases")
@@ -111,7 +115,7 @@ def text_to_symptom_vector(text, symptoms):
 
 
 def init_db():
-    conn = sqlite3.connect("appointments.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -144,7 +148,7 @@ def signup():
     data = request.get_json()
 
     try:
-        conn = sqlite3.connect("appointments.db")
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO users (username, password, role) VALUES (?, ?, 'user')",
@@ -162,7 +166,7 @@ def signup():
 def login():
     data = request.get_json()
 
-    conn = sqlite3.connect("appointments.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
         "SELECT password, role FROM users WHERE username=?",
@@ -215,7 +219,7 @@ def book_appointment():
         if not data.get(field):
             return jsonify({"message": f"Missing {field}"}), 400
 
-    conn = sqlite3.connect("appointments.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -251,7 +255,7 @@ def book_appointment():
 def appointments():
     username = get_jwt_identity()
 
-    conn = sqlite3.connect("appointments.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -281,7 +285,7 @@ def appointments():
 # ================= BOOKED SLOTS =================
 @app.route("/booked_slots", methods=["GET"])
 def booked_slots():
-    conn = sqlite3.connect("appointments.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
         "SELECT time_slot FROM appointments WHERE doctor=? AND date=?",
@@ -297,7 +301,7 @@ def booked_slots():
 def admin_login():
     data = request.get_json()
 
-    conn = sqlite3.connect("appointments.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
         "SELECT password, role FROM users WHERE username=?",
@@ -330,7 +334,7 @@ def admin_appointments():
     if claims.get("role") != "admin":
         return jsonify({"message": "Admin access required"}), 403
 
-    conn = sqlite3.connect("appointments.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
         SELECT username, disease, department, doctor, date, time_slot
@@ -359,7 +363,7 @@ def admin_appointments():
 def cancel_appointment(appointment_id):
     username = get_jwt_identity()
 
-    conn = sqlite3.connect("appointments.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -379,4 +383,5 @@ def cancel_appointment(appointment_id):
 if __name__ == "__main__":
     init_db()
     app.run(host="0.0.0.0", port=5000)
+
 
